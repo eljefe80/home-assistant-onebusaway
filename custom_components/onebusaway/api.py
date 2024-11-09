@@ -7,6 +7,7 @@ import socket
 import aiohttp
 import async_timeout
 
+from datetime import timedelta
 from homeassistant.util import Throttle
 
 MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=120)
