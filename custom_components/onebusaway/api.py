@@ -7,6 +7,9 @@ import socket
 import aiohttp
 import async_timeout
 
+from homeassistant.util import Throttle
+
+MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=120)
 
 class OneBusAwayApiClientError(Exception):
     """Exception to indicate a general API error."""
@@ -36,6 +39,7 @@ class OneBusAwayApiClient:
         self._stop = stop
         self._session = session
 
+    @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def async_get_data(self) -> any:
         """Get data from the API."""
         return await self._api_wrapper(
