@@ -92,6 +92,8 @@ class OneBusAwaySensor(SensorEntity):
             for d in self.data.get("data")["entry"]["arrivalsAndDepartures"]
             if d["predictedDepartureTime"] > current
         ]
+        if not departures:
+            return None
         departure = min(departures) / 1000
         return datetime.fromtimestamp(departure, timezone.utc)
 
@@ -113,11 +115,13 @@ class OneBusAwaySensor(SensorEntity):
             self.next_arrival = soonest
             if self.unsub is not None:
                 self.unsub()
+                self.unsub = None
 
             #
             # set a timer to go off at the next arrival time so we can
             # invalidate the state
             #
-            self.unsub = async_track_point_in_time(
-                self.hass, self.refresh, self.next_arrival
-            )
+            if self.next_arrival is not None:
+                self.unsub = async_track_point_in_time(
+                    self.hass, self.refresh, self.next_arrival
+                )
