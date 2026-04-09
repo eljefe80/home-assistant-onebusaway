@@ -1,4 +1,4 @@
-"""Sample API Client."""
+"""OneBusAway API Client."""
 from __future__ import annotations
 
 import asyncio
@@ -7,10 +7,6 @@ import socket
 import aiohttp
 import async_timeout
 
-from datetime import timedelta
-from homeassistant.util import Throttle
-
-MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=120)
 
 class OneBusAwayApiClientError(Exception):
     """Exception to indicate a general API error."""
@@ -25,7 +21,7 @@ class OneBusAwayApiClientAuthenticationError(OneBusAwayApiClientError):
 
 
 class OneBusAwayApiClient:
-    """Sample API Client."""
+    """OneBusAway API Client."""
 
     def __init__(
         self,
@@ -34,13 +30,12 @@ class OneBusAwayApiClient:
         stop: str,
         session: aiohttp.ClientSession,
     ) -> None:
-        """Sample API Client."""
+        """Initialize the API client."""
         self._url = url
         self._key = key
         self._stop = stop
         self._session = session
 
-    @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def async_get_data(self) -> any:
         """Get data from the API."""
         return await self._api_wrapper(

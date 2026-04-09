@@ -1,28 +1,20 @@
 """Sensor platform for onebusaway."""
 from __future__ import annotations
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from time import time
-
-from homeassistant.helpers.entity import DeviceInfo
 
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
     SensorDeviceClass,
 )
-from homeassistant.const import (
-    CONF_URL,
-    CONF_ID,
-    CONF_TOKEN,
-)
+from homeassistant.const import CONF_ID
+from homeassistant.core import callback
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_point_in_time
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
 from .const import ATTRIBUTION, DOMAIN, NAME, VERSION
-
-from .api import OneBusAwayApiClient
-
-SCAN_INTERVAL = timedelta(minutes=1)
 
 ENTITY_DESCRIPTIONS = (
     SensorEntityDescription(
@@ -35,15 +27,10 @@ ENTITY_DESCRIPTIONS = (
 
 async def async_setup_entry(hass, entry, async_add_devices):
     """Set up the sensor platform."""
-    client = OneBusAwayApiClient(
-        url=entry.data[CONF_URL],
-        key=entry.data[CONF_TOKEN],
-        stop=entry.data[CONF_ID],
-        session=async_get_clientsession(hass),
-    )
+    coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_devices(
         OneBusAwaySensor(
-            client=client,
+            coordinator=coordinator,
             entity_description=entity_description,
             stop=entry.data[CONF_ID],
         )
@@ -51,19 +38,18 @@ async def async_setup_entry(hass, entry, async_add_devices):
     )
 
 
-class OneBusAwaySensor(SensorEntity):
+class OneBusAwaySensor(CoordinatorEntity, SensorEntity):
     """onebusaway Sensor class."""
 
     def __init__(
         self,
-        client: OneBusAwayApiClient,
+        coordinator: DataUpdateCoordinator,
         entity_description: SensorEntityDescription,
         stop: str,
     ) -> None:
         """Initialize the sensor class."""
-        super().__init__()
+        super().__init__(coordinator)
         self.entity_description = entity_description
-        self.client = client
         self._attr_attribution = ATTRIBUTION
         self._attr_unique_id = stop
         self._attr_device_info = DeviceInfo(
@@ -75,23 +61,19 @@ class OneBusAwaySensor(SensorEntity):
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
-    data = None
     unsub = None
     next_arrival = None
 
-    def compute_next(self) -> datetime:
-        """Compute the next arrival time from the last read data."""
-        if self.data is None:
+    def compute_next(self) -> datetime | None:
+        """Compute the next arrival time from the coordinator data."""
+        data = self.coordinator.data
+        if data is None:
             return None
-        # This is a unix timestamp value except in
-        # milliseconds because precision is super
-        # important when discussing train departure
-        # times
+        # Timestamps are in milliseconds
         current = time() * 1000
-        # We want the soonest time that is after the current time
         departures = [
             d["predictedDepartureTime"]
-            for d in self.data.get("data")["entry"]["arrivalsAndDepartures"]
+            for d in data.get("data")["entry"]["arrivalsAndDepartures"]
             if d["predictedDepartureTime"] > current
         ]
         if not departures:
@@ -100,20 +82,20 @@ class OneBusAwaySensor(SensorEntity):
         return datetime.fromtimestamp(departure, timezone.utc)
 
     def refresh(self, _timestamp) -> None:
-        """Invalidate the current sensor state."""
-        self.schedule_update_ha_state(True)
+        """Request a coordinator refresh when the arrival time is reached."""
+        self.hass.async_create_task(self.coordinator.async_request_refresh())
 
     @property
-    def native_value(self) -> str:
+    def native_value(self) -> datetime | None:
         """Return the native value of the sensor."""
         return self.next_arrival
 
-    async def async_update(self):
-        """Retrieve latest state."""
-        self.data = await self.client.async_get_data()
-
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
         soonest = self.compute_next()
         if soonest is None:
+            self.async_write_ha_state()
             return
 
         if soonest != self.next_arrival:
@@ -121,12 +103,8 @@ class OneBusAwaySensor(SensorEntity):
             if self.unsub is not None:
                 self.unsub()
                 self.unsub = None
+            self.unsub = async_track_point_in_time(
+                self.hass, self.refresh, self.next_arrival
+            )
 
-            #
-            # set a timer to go off at the next arrival time so we can
-            # invalidate the state
-            #
-            if self.next_arrival is not None:
-                self.unsub = async_track_point_in_time(
-                    self.hass, self.refresh, self.next_arrival
-                )
+        self.async_write_ha_state()
