@@ -111,6 +111,9 @@ class OneBusAwaySensor(SensorEntity):
         self.data = await self.client.async_get_data()
 
         soonest = self.compute_next()
+        if soonest is None:
+            return
+
         if soonest != self.next_arrival:
             self.next_arrival = soonest
             if self.unsub is not None:
