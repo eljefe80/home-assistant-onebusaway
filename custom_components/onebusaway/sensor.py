@@ -1,6 +1,6 @@
 """Sensor platform for onebusaway."""
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import time
 
 from homeassistant.helpers.entity import DeviceInfo
@@ -21,6 +21,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import ATTRIBUTION, DOMAIN, NAME, VERSION
 
 from .api import OneBusAwayApiClient
+
+SCAN_INTERVAL = timedelta(minutes=1)
 
 ENTITY_DESCRIPTIONS = (
     SensorEntityDescription(
