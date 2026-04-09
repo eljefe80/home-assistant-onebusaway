@@ -81,6 +81,7 @@ class OneBusAwaySensor(CoordinatorEntity, SensorEntity):
         departure = min(departures) / 1000
         return datetime.fromtimestamp(departure, timezone.utc)
 
+    @callback
     def refresh(self, _timestamp) -> None:
         """Request a coordinator refresh when the arrival time is reached."""
         self.hass.async_create_task(self.coordinator.async_request_refresh())
